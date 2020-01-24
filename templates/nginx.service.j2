@@ -1,0 +1,48 @@
+###############################################################################
+# Stop dance for nginx
+# ====================
+#
+# ExecStop sends SIGSTOP (graceful stop) to the nginx process.
+# If, after 5s (--retry QUIT/5) nginx is still running, systemd takes control
+# and sends SIGTERM (fast shutdown) to the main process.
+# After another 5s (TimeoutStopSec=5), and if nginx is alive, systemd sends
+# SIGKILL to all the remaining processes in the process group (KillMode=mixed).
+#
+# Nginx signals reference doc at http://nginx.org/en/docs/control.html
+###############################################################################
+
+[Unit]
+
+Description=The nginx http and reverse proxy server
+
+After=ip6tables.service
+After=iptables.service
+After=network.target
+After=nftables.service
+After=nss-lookup.target
+After=remote-fs.target
+
+[Service]
+
+ExecStartPre={{ nginx_main_bin }} -t
+ExecStart={{ nginx_main_bin }}
+ExecStop={{ nginx_main_bin }} -s quit
+ExecReload={{ nginx_main_bin }} -s reload
+
+Type=forking
+
+PIDFile={{ nginx_run_dir }}/nginx.pid
+
+KillMode=mixed
+KillSignal=SIGQUIT
+
+PrivateTmp=true
+
+TimeoutStopSec=5
+
+Restart=on-failure
+RestartSec=30
+
+[Install]
+
+WantedBy=multi-user.target

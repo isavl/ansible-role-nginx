@@ -1,0 +1,261 @@
+pid {{ nginx_run_dir }}/nginx.pid;
+
+include /usr/share/nginx/modules/*.conf;
+
+daemon on;
+
+user {{ nginx_user_name }};
+
+worker_processes {{ nginx_config_worker_processes | default(2) }};
+
+events {
+    worker_connections {{ nginx_config_worker_connections | default(256) }};
+
+    multi_accept on;
+
+    use epoll;
+}
+
+{% if nginx_config_http_servers is defined %}
+http {
+    include {{ nginx_config_dir }}/mime.types;
+
+    log_format main '$time_local [access] $remote_addr - $http_x_real_ip $remote_user '
+                    '$request $status $bytes_sent '
+                    '$http_referer $http_user_agent $gzip_ratio';
+
+    # access_log {{ nginx_config_http_access_log | default(nginx_log_dir + '/http_access.log main') }};
+    # error_log {{ nginx_config_http_error_log | default(nginx_log_dir + '/http_error.log info') }};
+    access_log {{ nginx_config_http_access_log | default('syslog:server=unix:/dev/log main') }};
+    error_log {{ nginx_config_http_error_log | default('syslog:server=unix:/dev/log info') }};
+
+    sendfile {{ nginx_config_http_sendfile | default('on') }};
+
+    tcp_nopush {{ nginx_config_http_tcp_nopush | default('on') }};
+    tcp_nodelay {{ nginx_config_http_tcp_nodelay | default('on') }};
+
+    keepalive_timeout {{ nginx_config_http_keepalive_timeout | default('30s') }};
+
+    server_names_hash_bucket_size {{ nginx_config_http_server_names_hash_bucket_size | default(128) }};
+
+    types_hash_max_size {{ nginx_config_http_types_hash_max_size | default(4096) }};
+
+    default_type {{ nginx_config_http_default_type | default('application/octet-stream') }};
+
+    ssl_dhparam {{ nginx_pki_dir }}/dh.pem;
+
+    #ssl_trusted_certificate {{ nginx_pki_dir }}/ca.crt;
+
+    ssl_certificate {{ nginx_pki_dir }}/default.crt;
+    ssl_certificate_key {{ nginx_pki_dir }}/default.key;
+
+    ssl_protocols {{ nginx_config_http_ssl_protocols | default('TLSv1.2 TLSv1.3') }};
+    ssl_prefer_server_ciphers {{ nginx_config_http_ssl_prefer_server_ciphers | default('on') }};
+
+    ssl_early_data {{ nginx_config_http_ssl_early_data | default('on') }};
+
+    ssl_session_cache {{ nginx_config_http_ssl_session_cache | default('shared:SSL:20m') }};
+    ssl_session_timeout {{ nginx_config_http_ssl_session_timeout | default('10m') }};
+
+    charset {{ nginx_config_http_charset | default('utf-8') }};
+
+    gzip on;
+    gzip_disable "msie6";
+    gzip_buffers 32 4k;
+    gzip_comp_level 6;
+    gzip_http_version 1.1;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+    gzip_vary on;
+
+    open_file_cache max=256 inactive=20s;
+    open_file_cache_valid 60s;
+    open_file_cache_min_uses 4;
+    open_file_cache_errors off;
+
+    server_tokens off;
+
+    # Do not allow the browser to render the page inside an frame or iframe
+    # and avoid clickjacking http://en.wikipedia.org/wiki/Clickjacking.
+    # If you need to allow [i]frames, you can use SAMEORIGIN or even set an uri with ALLOW-FROM uri
+    # https://developer.mozilla.org/en-US/docs/HTTP/X-Frame-Options
+    add_header X-Frame-Options SAMEORIGIN;
+
+    # When serving user-supplied content, include a X-Content-Type-Options: nosniff header along with the Content-Type: header,
+    # to disable content-type sniffing on some browsers.
+    # https://www.owasp.org/index.php/List_of_useful_HTTP_headers
+    # Currently suppoorted in IE > 8 http://blogs.msdn.com/b/ie/archive/2008/09/02/ie8-security-part-vi-beta-2-update.aspx
+    # http://msdn.microsoft.com/en-us/library/ie/gg622941(v=vs.85).aspx
+    # 'soon' on Firefox https://bugzilla.mozilla.org/show_bug.cgi?id=471020
+    add_header X-Content-Type-Options nosniff;
+
+    # This header enables the Cross-site scripting (XSS) filter built into most recent web browsers.
+    # It's usually enabled by default anyway, so the role of this header is to re-enable the filter for
+    # this particular website if it was disabled by the user.
+    # https://www.owasp.org/index.php/List_of_useful_HTTP_headers
+    add_header X-XSS-Protection "1; mode=block";
+
+    # Enable HSTS(HTTP Strict Transport Security)
+    # https://developer.mozilla.org/en-US/docs/Security/HTTP_Strict_Transport_Security
+    # to avoid ssl stripping https://en.wikipedia.org/wiki/SSL_stripping#SSL_stripping
+    # also https://hstspreload.org/
+    add_header Strict-Transport-Security "max-age=315306000; includeSubdomains; preload";
+
+    proxy_http_version 1.1;
+
+    proxy_hide_header X-Powered-By;
+
+    proxy_set_header Host $http_host;
+    proxy_set_header Connection $http_connection;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Early-Data $ssl_early_data;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    real_ip_header X-Forwarded-For;
+
+{% if nginx_config_http_extra_options is defined %}
+    {{ nginx_config_http_extra_options | indent(4) }}
+{% endif %}
+
+{% if nginx_config_http_upstreams is defined %}
+{% for upstream in nginx_config_http_upstreams %}
+    upstream {{ upstream['name'] }} {
+{% for server in upstream['servers'] %}
+        server {{ server }};
+{% endfor %}
+{% if upstream['zone'] is defined %}
+        zone {{ upstream['zone'] }};
+{% endif %}
+{% if upstream['keepalive'] is defined %}
+        keepalive {{ upstream['keepalive'] }};
+{% if upstream['keepalive_requests'] is defined %}
+        keepalive_requests {{ upstream['keepalive_requests'] }};
+{% endif %}
+{% if upstream['keepalive_timeout'] is defined %}
+        keepalive_timeout {{ upstream['keepalive_timeout'] }};
+{% endif %}
+{% endif %}
+    }
+{% if not loop['last'] %}
+
+{% endif %}
+{% endfor %}
+{% endif %}
+
+    server {
+        listen 80 default_server;
+        listen [::]:80 default_server;
+
+        server_name _;
+
+        return 301 https://$host$request_uri;
+    }
+
+    server {
+        listen 443 ssl http2 default_server;
+        listen [::]:443 ssl http2 default_server;
+
+        server_name _;
+
+        return 404;
+    }
+
+{% for server in nginx_config_http_servers %}
+    server {
+{% for listen in server['listen'] %}
+        listen {{ listen }};
+{% endfor %}
+
+        server_name {{ server['name'] }};
+
+{% if server['ssl_cert'] | bool
+  and not server['default_ssl_cert'] | default(False) | bool %}
+        ssl_certificate {{ server['ssl_certificate'] | default(nginx_pki_dir + '/' + server['name'] | regex_replace('\.', '_') + '.crt') }};
+        ssl_certificate_key {{ server['ssl_certificate_key'] | default(nginx_pki_dir + '/' + server['name'] | regex_replace('\.', '_') + '.key') }};
+{%- endif %}
+
+{% if server['root'] is defined %}
+        root {{ server['root'] }};
+{% endif %}
+
+        # access_log {{ server['access_log'] | default(nginx_log_dir + '/http_access_' + server['name'] | regex_replace('\.', '_') + '.log main') }};
+        # error_log {{ server['error_log'] | default(nginx_log_dir + '/http_error_' + server['name'] | regex_replace('\.', '_') + '.log info') }};
+        access_log {{ server['access_log'] | default('syslog:server=unix:/dev/log main') }};
+        error_log {{ server['error_log'] | default('syslog:server=unix:/dev/log info') }};
+
+{% if server['extra_options'] is defined %}
+        {{ server['extra_options'] | indent(8) }}
+{%- endif %}
+
+{% for location in server['locations'] %}
+        location {{ location['url'] }} {
+            {{ location['extra_options'] | indent(12) }}
+        }
+{% if not loop['last'] %}
+
+{% endif %}
+{% endfor %}
+    }
+{% if not loop['last'] %}
+
+{% endif %}
+{% endfor %}
+}
+{% endif %}
+
+{% if nginx_config_stream_servers is defined %}
+stream {
+    log_format main '[access] $remote_addr '
+                     '$protocol $status $bytes_sent $bytes_received '
+                     '$session_time';
+
+    # access_log {{ nginx_config_stream_access_log | default(nginx_log_dir + '/stream_access.log main') }};
+    # error_log {{ nginx_config_stream_error_log | default(nginx_log_dir + '/stream_error.log info') }};
+    access_log {{ nginx_config_stream_access_log | default('syslog:server=unix:/dev/log main') }};
+    error_log {{ nginx_config_stream_error_log | default('syslog:server=unix:/dev/log info') }};
+
+{% if nginx_config_stream_extra_options is defined %}
+    {{ nginx_config_stream_extra_options | indent(4) }}
+{% endif %}
+
+{% if nginx_config_stream_upstreams is defined %}
+{% for upstream in nginx_config_stream_upstreams %}
+    upstream {{ upstream['name'] }} {
+{% for server in upstream['servers'] %}
+        server {{ server }};
+{% endfor %}
+    }
+{% if not loop['last'] %}
+
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% for server in nginx_config_stream_servers %}
+    server {
+{% for listen in server['listen'] %}
+        listen {{ listen }};
+{% endfor %}
+
+{% if server['proxy_pass'] is defined %}
+        proxy_pass {{ server['proxy_pass'] }};
+{% endif %}
+
+        # access_log {{ server['access_log'] | default(nginx_log_dir + '/stream_access_' + server['name'] | regex_replace('\.', '_') + '.log main') }};
+        # error_log {{ server['error_log'] | default(nginx_log_dir + '/stream_error_' + server['name'] | regex_replace('\.', '_') + '.log info') }};
+        access_log {{ server['access_log'] | default('syslog:server=unix:/dev/log main') }};
+        error_log {{ server['error_log'] | default('syslog:server=unix:/dev/log info') }};
+
+{% if server['extra_options'] is defined %}
+        {{ server['extra_options'] | indent(8) }}
+{% endif %}
+    }
+{% if not loop['last'] %}
+
+{% endif %}
+{% endfor %}
+}
+{% endif %}

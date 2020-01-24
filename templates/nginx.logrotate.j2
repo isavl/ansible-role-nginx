@@ -1,0 +1,7 @@
+{{ nginx_log_dir }}/*.log {
+    create 0640 {{ nginx_user_name }} {{ nginx_group_name }}
+
+    postrotate
+        {{ nginx_main_bin }} -s reload
+    endscript
+}

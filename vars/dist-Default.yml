@@ -1,0 +1,13 @@
+---
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Packages required to be installed.
+nginx_packages:
+
+  - "nginx"
+  - "nginx-mod-stream"
+  - "openssl"
+  - "python3-cryptography"
+
+# Main executable path.
+nginx_main_bin: "/usr/sbin/nginx"

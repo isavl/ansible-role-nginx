@@ -1,0 +1,108 @@
+---
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Manage or not system user/group.
+nginx_user_managed: true
+nginx_group_managed: true
+
+# System user/group name.
+nginx_user_name: "nginx"
+nginx_group_name: "nginx"
+
+# System user/group id.
+nginx_user_id: ~
+nginx_group_id: ~
+
+# List of system user additional groups.
+nginx_user_groups: []
+
+# Directory for config files.
+nginx_config_dir: "/etc/nginx"
+
+# Directory for certificate and key files.
+nginx_pki_dir: "/etc/pki/nginx"
+
+# Directory for processes pid and socket files.
+nginx_run_dir: "/run/nginx"
+
+# Directory for log files.
+nginx_log_dir: "/var/log/nginx"
+
+# Directory for data files.
+nginx_data_dir: "/var/lib/nginx"
+
+# List of config file templates.
+#
+# Format:
+#   - name - name of file on target system (if not defined used src name)
+#     src  - path to config file template
+nginx_config_files:
+
+  - src: "nginx.conf.j2"
+
+# List of certificate and key files.
+#
+# Format:
+#   - name - name of file on target system (if not defined used src name)
+#     src  - path to certificate or key file
+nginx_pki_files: []
+
+# Manage or not generation of diffie-hellman parameters.
+nginx_pki_dh_gen: true
+
+# Diffie-hellman parameters length.
+nginx_pki_dh_length: 4096
+
+# Manage or not generation of default self signed certificate.
+nginx_pki_selfsigned_gen: true
+
+# Manage or not generation of logrotate config file.
+nginx_logrotate_manage: true
+
+# Directory for logrotate dynamic config files.
+nginx_logrotate_config_d_dir: "{{ logrotate_config_d_dir if logrotate_config_d_dir is defined else '/etc/logrotate.d' }}"
+
+# List of logrotate dynamic config file templates.
+#
+# Format:
+#   - name - name of file on target system (if not defined used src name)
+#     src  - path to config file template
+nginx_logrotate_d_config_files:
+
+  - src: "nginx.logrotate.j2"
+
+# Manage or not systemd services.
+nginx_systemd_managed: true
+
+# Systemd service files.
+#
+# Format:
+#   - name - name of file on target system (if not defined used src name)
+#     src  - path to template file
+#     enabled - enable service on boot (disabled by default)
+#     started - starting service after setup (disabled by default)
+#     react - if true this service react on changes in config files (disabled by default)
+nginx_systemd_service_files:
+
+  - src: "nginx.service.j2"
+    enabled: true
+    started: true
+    react: true
+
+# Systemd timer files.
+#
+# Format:
+#   - name - name of file on target system (if not defined used src name)
+#     src  - path to template file
+#     enabled - enable service on boot (disabled by default)
+#     started - starting service after setup (disabled by default)
+nginx_systemd_timer_files: []
+
+# List of tmpfiles.d config file templates.
+#
+# Format:
+#   - name - name of file on target system (if not defined used src name)
+#     src  - path to template file
+nginx_tmpfiles_d_files:
+
+  - src: "nginx.tmpfile.j2"
